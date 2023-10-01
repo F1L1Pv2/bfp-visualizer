@@ -6,8 +6,14 @@ version = 3
 name = "bfp-visualizer"
 version = "0.1.0"
 dependencies = [
+ "brainfuck_plus-core",
  "raylib",
 ]
+
+[[package]]
+name = "brainfuck_plus-core"
+version = "0.1.0"
+source = "git+https://github.com/F1L1Pv2/brainfuck_plus-core#d70aed826c3b2f52dd676c23cda9287dbf25f246"
 
 [[package]]
 name = "cc"
