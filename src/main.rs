@@ -167,7 +167,7 @@ fn main() {
 
     let tokens = lex_file(contents, filename.clone());
     // dbg!(&tokens);
-    let tokens = preprocess_tokens(tokens, filename, path, includes, &mut tapes);
+    let tokens = preprocess_tokens(tokens, filename.clone(), path, includes, &mut tapes);
     let operations = parse_file(tokens, &tapes);
 
     let mut tape_arrays: Vec<TapeArr> = Vec::new();
@@ -178,6 +178,9 @@ fn main() {
         // exit(1);
         tape_arrays.push(tapearr);
     }
+
+    let jumps = brainfuck_plus_core::prelude::cross_reference(&operations);
+
 
     // dbg!(&tape_arrays);
 
@@ -238,6 +241,8 @@ fn main() {
             "output.mp4",
         ])
         .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
         .spawn()
     {
         Err(why) => panic!("Couldn't execute ffmpeg: {}", why),
@@ -246,7 +251,12 @@ fn main() {
 
     let child_stdin = process.stdin.as_mut().unwrap();
 
-    let mut record: bool = false;
+
+    let mut record: bool = true;
+
+    let current_tape: String = "main".to_string();
+
+    let mut instruction_index: usize = 0;
 
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
@@ -256,26 +266,26 @@ fn main() {
 
         d.clear_background(background_color);
 
-        if d.is_key_pressed(KeyboardKey::KEY_SPACE) {
-            record = true;
-        }
+        // if d.is_key_pressed(KeyboardKey::KEY_SPACE) {
+        //     record = true;
+        // }
 
-        if d.is_key_pressed(KeyboardKey::KEY_D) {
-            tape_arrays[0].pointer += 1;
-        }
+        // if d.is_key_pressed(KeyboardKey::KEY_D) {
+        //     tape_arrays[0].pointer += 1;
+        // }
 
-        if d.is_key_pressed(KeyboardKey::KEY_A) {
-            tape_arrays[0].pointer -= 1;
-        }
+        // if d.is_key_pressed(KeyboardKey::KEY_A) {
+        //     tape_arrays[0].pointer -= 1;
+        // }
 
-        if d.is_key_pressed(KeyboardKey::KEY_W) {
-            let pointer = tape_arrays[0].pointer;
-            tape_arrays[0].vec[pointer] += 1;
-        }
-        if d.is_key_pressed(KeyboardKey::KEY_S) {
-            let pointer = tape_arrays[0].pointer;
-            tape_arrays[0].vec[pointer] -= 1;
-        }
+        // if d.is_key_pressed(KeyboardKey::KEY_W) {
+        //     let pointer = tape_arrays[0].pointer;
+        //     tape_arrays[0].vec[pointer] += 1;
+        // }
+        // if d.is_key_pressed(KeyboardKey::KEY_S) {
+        //     let pointer = tape_arrays[0].pointer;
+        //     tape_arrays[0].vec[pointer] -= 1;
+        // }
 
         // draw_array(&[5, 2, 4, 3], &mut d, Vector2 { x: 0., y: 0. });
 
@@ -286,6 +296,77 @@ fn main() {
 
         for (n,tape_arr) in tape_arrays.iter().enumerate(){
             draw_tape_arr(tape_arr, &mut d, Vector2::new(tapes_origin.x, tapes_origin.y + n as f32 * cell_width*2.0), cell_width)
+        }
+
+        if instruction_index >= operations.len(){
+            break;
+        }
+
+        let operation = &operations[instruction_index];
+
+
+        match operation.token_type {
+            TokenType::Add => {
+                for tape_arr in tape_arrays.iter_mut(){
+                    if tape_arr.name == current_tape{
+                        let pointer = tape_arr.pointer;
+                        tape_arr.vec[pointer] += 1;
+                    }
+                }
+            },
+
+            TokenType::Sub => {
+                for tape_arr in tape_arrays.iter_mut(){
+                    if tape_arr.name == current_tape{
+                        let pointer = tape_arr.pointer;
+                        tape_arr.vec[pointer] -= 1;
+                    }
+                }
+            },
+
+            TokenType::PointerRight => {
+                for tape_arr in tape_arrays.iter_mut(){
+                    if tape_arr.name == current_tape{
+                        if tape_arr.pointer < tape_arr.vec.len(){
+                            tape_arr.pointer += 1;
+                        }else {
+                            tape_arr.pointer = 0;
+                        }
+                    }
+                }
+            },
+
+            TokenType::PointerLeft => {
+                for tape_arr in tape_arrays.iter_mut(){
+                    if tape_arr.name == current_tape{
+                        
+                        if tape_arr.pointer > 0{
+                            tape_arr.pointer -= 1;
+                        }else{
+                            tape_arr.pointer = tape_arr.vec.len()-1;
+                        }
+
+                    }
+                }
+            },
+
+            TokenType::PointerReset => {
+                for tape_arr in tape_arrays.iter_mut(){
+                    if tape_arr.name == current_tape{
+                        tape_arr.pointer = 0;
+                    }
+                }
+            },
+
+            _ => {
+                // process.kill();
+                println!("{}:{}:{} {:?}x{} is not supported", filename.clone() ,operation.row,operation.col+2-operation.count,operation.token_type, operation.count);
+                // exit(1);
+            }
+        }
+
+        if instruction_index < operations.len(){
+            instruction_index += 1;
         }
 
 
