@@ -239,6 +239,10 @@ fn main() {
 
     // dbg!(&operations);
 
+    let vs_path = Path::new(&operations[0].filename);
+    let vs_content = fs::read_to_string(vs_path).unwrap();
+
+
 
     let window_size = (640, 480);
     let framerate = 60;
@@ -315,11 +319,14 @@ fn main() {
             out += char.to_string().as_str();
         }
 
-        d.draw_text(out.as_str(), s_width / 2, 50, 50, color3);
+        // d.draw_text(out.as_str(), s_width / 2, 50, 50, color3);
 
         t += 1.0;
 
-        draw_array(&[5 as u8, 2, 4, 3], &mut d, Vector2 { x: 0., y: 0. });
+        // draw_array(&[5 as u8, 2, 4, 3], &mut d, Vector2 { x: 0., y: 0. });
+
+        d.draw_text(vs_content.as_str(), 0, 0, 10, foreground_color);
+
 
         drop(d);
 
