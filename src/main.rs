@@ -1,87 +1,22 @@
+use ::core::panic;
 use ::core::slice::{self};
 use raylib::prelude::*;
-use std::io::prelude::*;
-use std::env;
+use std::{env, cell};
 use std::fs;
 use std::fs::File;
+use std::io::prelude::*;
 use std::io::Write;
 use std::path::Path;
-use std::process::{Command, Stdio, exit};
+use std::process::{exit, Command, Stdio};
 
-use brainfuck_plus_core::code_gen::generate_code;
-use brainfuck_plus_core::parser::parse_file;
 use brainfuck_plus_core::lexer::lex_file;
+use brainfuck_plus_core::parser::parse_file;
 
-use brainfuck_plus_core::preprocess::preprocess_tokens;
 use brainfuck_plus_core::prelude::*;
+use brainfuck_plus_core::preprocess::preprocess_tokens;
 
-trait unsigned {
-    fn print(&self) -> usize;
-}
-
-impl unsigned for u8 {
-    fn print(&self) -> usize {
-        *self as usize
-    }
-}
-
-impl unsigned for u16 {
-    fn print(&self) -> usize {
-        *self as usize
-    }
-}
-
-impl unsigned for u32 {
-    fn print(&self) -> usize {
-        *self as usize
-    }
-}
-
-impl unsigned for u64 {
-    fn print(&self) -> usize {
-        *self as usize
-    }
-}
-
-impl unsigned for usize {
-    fn print(&self) -> usize {
-        *self
-    }
-}
-
-fn draw_array<T>(array: &[T], d: &mut RaylibDrawHandle, origin: Vector2)
-where
-    T: unsigned,
-{
-    let s_width = d.get_screen_width() as usize;
-    let s_height = d.get_screen_height() as usize;
-
-
-    let line_thick: i32 = 10;
-
-    
-    let s = (s_width as f32 / 1.5 ) / array.len() as f32;
-
-    let padding = (s_width as f32 - line_thick as f32 * 2.) / s_width as f32;
-
-    let offset_x = s * array.len() as f32 * padding/ 2.0;
-
-    for (n, item) in array.iter().enumerate() {
-
-        let x = s_width as f32 / 2.0 + (n as f32 * s) as f32 * padding - offset_x;
-        let y = 200.0;
-
-        d.draw_rectangle_lines_ex(Rectangle{
-            x,
-            y,
-            width: s as f32,
-            height: s as f32
-        }, line_thick, Color::from_hex("FFFFFF").unwrap());
-
-        d.draw_text(format!("{}",item.print()).as_str(), x as i32, y as i32, 20, Color::from_hex("FFFFFF").unwrap())
-
-    }
-}
+mod prelude;
+use prelude::*;
 
 fn usage(filename: String) {
     let mut arr = filename.split('/').collect::<Vec<&str>>();
@@ -94,7 +29,6 @@ fn usage(filename: String) {
 }
 
 fn main() {
-
     let args: Vec<String> = env::args().collect();
 
     let mut arg_i: usize = 1;
@@ -228,21 +162,31 @@ fn main() {
     let mut tapes: Vec<Tape> = vec![Tape {
         name: "main".to_string(),
         size: Size::Byte,
-        cell_count: MEM_SIZE,
+        cell_count: 1024,
     }];
-
 
     let tokens = lex_file(contents, filename.clone());
     // dbg!(&tokens);
-    let tokens = preprocess_tokens(tokens, filename.clone(), path, includes, &mut tapes);
+    let tokens = preprocess_tokens(tokens, filename, path, includes, &mut tapes);
     let operations = parse_file(tokens, &tapes);
+
+    let mut tape_arrays: Vec<TapeArr> = Vec::new();
+
+    for tape in tapes{
+        let tapearr = TapeArr::new(tape.name.clone(),tape.size.clone(), tape.cell_count);
+        // println!("{}", tapearr.vec.len());
+        // exit(1);
+        tape_arrays.push(tapearr);
+    }
+
+    // dbg!(&tape_arrays);
+
+    // exit(1);
 
     // dbg!(&operations);
 
     let vs_path = Path::new(&operations[0].filename);
     let vs_content = fs::read_to_string(vs_path).unwrap();
-
-
 
     let window_size = (640, 480);
     let framerate = 60;
@@ -250,11 +194,13 @@ fn main() {
     let (mut rl, thread) = raylib::init()
         .size(window_size.0, window_size.1)
         .title("bfp-visualizer")
+        .msaa_4x()
         .build();
 
     rl.set_target_fps(framerate);
 
-    let background_color = Color::from_hex("000000").unwrap();
+    // let background_color = Color::from_hex("000000").unwrap();
+    let background_color = Color::from_hex("181818").unwrap();
     let foreground_color = Color::from_hex("FFFFFF").unwrap();
 
     //https://www.canva.com/colors/color-wheel/
@@ -300,48 +246,66 @@ fn main() {
 
     let child_stdin = process.stdin.as_mut().unwrap();
 
-    let mut t = 0.0;
-
-    let text = "baller".to_string();
+    let mut record: bool = false;
 
     while !rl.window_should_close() {
         let mut d = rl.begin_drawing(&thread);
-
+        d.draw_text(vs_content.as_str(), 0, 0, 15, Color::BLUE);
+        
         let (s_width, s_height) = (d.get_screen_width(), d.get_screen_height());
 
-        d.clear_background(color1);
+        d.clear_background(background_color);
 
-        d.draw_rectangle(t as i32, t as i32, s_width / 2, s_height / 2, color2);
-
-        let mut out: String = String::new();
-
-        for char in text.chars().take((t / 20.0) as usize) {
-            out += char.to_string().as_str();
+        if d.is_key_pressed(KeyboardKey::KEY_SPACE) {
+            record = true;
         }
 
-        // d.draw_text(out.as_str(), s_width / 2, 50, 50, color3);
+        if d.is_key_pressed(KeyboardKey::KEY_D) {
+            tape_arrays[0].pointer += 1;
+        }
 
-        t += 1.0;
+        if d.is_key_pressed(KeyboardKey::KEY_A) {
+            tape_arrays[0].pointer -= 1;
+        }
 
-        // draw_array(&[5 as u8, 2, 4, 3], &mut d, Vector2 { x: 0., y: 0. });
+        if d.is_key_pressed(KeyboardKey::KEY_W) {
+            let pointer = tape_arrays[0].pointer;
+            tape_arrays[0].vec[pointer] += 1;
+        }
+        if d.is_key_pressed(KeyboardKey::KEY_S) {
+            let pointer = tape_arrays[0].pointer;
+            tape_arrays[0].vec[pointer] -= 1;
+        }
 
-        d.draw_text(vs_content.as_str(), 0, 0, 10, foreground_color);
+        // draw_array(&[5, 2, 4, 3], &mut d, Vector2 { x: 0., y: 0. });
+
+        // draw_tape_arr(&tape_arrays[0], &mut d, Vector2 { x: 10.0, y: 200.0 }, 50.0);
+
+        let cell_width = 50.0;
+        let tapes_origin: Vector2 = Vector2::new(10.0, 50.0);
+
+        for (n,tape_arr) in tape_arrays.iter().enumerate(){
+            draw_tape_arr(tape_arr, &mut d, Vector2::new(tapes_origin.x, tapes_origin.y + n as f32 * cell_width*2.0), cell_width)
+        }
+
 
 
         drop(d);
 
-        let img = rl.get_screen_data(&thread);
+        if record {
+            let img = rl.get_screen_data(&thread);
 
-        let buf: &[u8] = unsafe {
-            slice::from_raw_parts(
-                img.data as *const u8,
-                s_width as usize * s_height as usize * 4,
-            )
-        };
+            let buf: &[u8] = unsafe {
+                slice::from_raw_parts(
+                    img.data as *const u8,
+                    s_width as usize * s_height as usize * 4,
+                )
+            };
 
-        child_stdin.write_all(buf).unwrap();
+            child_stdin.write_all(buf).unwrap();
 
-        child_stdin.flush().unwrap();
+            child_stdin.flush().unwrap();
+        }
     }
 
     drop(process.stdin);
